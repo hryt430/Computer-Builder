@@ -51,7 +51,8 @@ class PC {
             case "ram":
                 pc.ramModel = model;
                 break;
-            case "storage":
+            case "ssd":
+            case "hdd":
                 pc.storageModel = model;
                 break;
         }
@@ -68,26 +69,27 @@ class PC {
             case "ram":
                 pc.ramBenchMark = benchMark;
                 break;
-            case "storage":
+            case "ssd":
+            case "hdd":
                 pc.storageBenchMark = benchMark;
                 break;
         }
     }
 
     static getGamingBenchmark(pc) {
-        let cpuScore = parseInt(pc.cpuBenchmark * 0.25);
-        let gpuScore = parseInt(pc.gpuBenchmark * 0.6);
-        let ramScore = parseInt(pc.memoryBenchmark * 0.125);
-        let storageScore = this.storageType = "SSD" ? parseInt(pc.storageBenchmark * 0.1) : parseInt(pc.storageBenchmark * 0.025);
-        return cpuScore + gpuScore + ramScore + storageScore;
+        let cpuScore = pc.cpuBenchMark * 0.25;
+        let gpuScore = pc.gpuBenchMark * 0.6;
+        let ramScore = pc.ramBenchMark * 0.125;
+        let storageScore = this.storageType = "ssd" ? pc.storageBenchMark * 0.1 : pc.storageBenchMark * 0.025;
+        return Math.floor(cpuScore + gpuScore + ramScore + storageScore);
     }
 
     static getWorkBenchmark(pc) {
-        let cpuScore = parseInt(pc.cpuBenchmark * 0.6);
-        let gpuScore = parseInt(pc.gpuBenchmark * 0.25);
-        let ramScore = parseInt(pc.ramBenchmark * 0.1);
-        let storageScore = parseInt(pc.storageBenchmark * 0.05);
-        return cpuScore + gpuScore + ramScore + storageScore;
+        let cpuScore = pc.cpuBenchMark * 0.6;
+        let gpuScore = pc.gpuBenchMark * 0.25;
+        let ramScore = pc.ramBenchMark * 0.1;
+        let storageScore = pc.storageBenchMark * 0.05;
+        return Math.floor(cpuScore + gpuScore + ramScore + storageScore);
     }
 }
 
@@ -121,8 +123,8 @@ function getModelData(parts, modelOption, models, benchMarks, pc) {
                 let filterRamList = ramModelFilter(models, pc);
                 addOptions(filterRamList, modelOption);
                 break;
-
-            case "storage" : 
+            case "ssd":
+            case "hdd" :
                 let filterStorageList = storageModelFilter(models, pc);
                 addOptions(filterStorageList, modelOption);
                 break;
@@ -134,7 +136,7 @@ function getModelData(parts, modelOption, models, benchMarks, pc) {
 
         modelOption.addEventListener("change", function(){
             let model = modelOption.value;
-            let benchMark = aa;
+            let benchMark = benchMarks[model];
             pc.setModel(parts, model, pc);
             pc.setBenchMark(parts, benchMark, pc);
         });
@@ -162,8 +164,8 @@ function getModel(data, modelList) {
 function getBenchMark(data, bmList) {
     for (let i in data) {
         let currentData = data[i];
-        if (bmList[currentData.benchMark] === undefined) { // ブランド名が存在する場合のみ処理
-            bmList[currentData.benchMark] = currentData.benchMark;
+        if (bmList[currentData.Model] === undefined) { // ブランド名が存在する場合のみ処理
+            bmList[currentData.Model] = currentData.Benchmark;
         }
     }
 }
@@ -200,10 +202,10 @@ function ramModelFilter(models, pc) {
 function storageModelFilter(models, pc) {
     let filterList = {};
     for(let key in models) {
-        if(models[key] == pc.storageBrand && models) aaa
+        if(models[key] == pc.storageBrand && key.includes(pc.storageSize)) filterList[key] = key;
     }
+    return filterList
 }
-
 
 function getRamBrand(ramBrand, ramModel, pc) {
     ramNum.addEventListener("change", function() {
@@ -214,14 +216,16 @@ function getRamBrand(ramBrand, ramModel, pc) {
 
 function getStorageData(storageBrand, storageModel, pc) { 
     storageType.addEventListener("change", function() {
-        pc.storageType = storageType.value;
-        getStorageSizeData(pc.storageType.toLowerCase(), storageSize, storageBrand, storageModel, pc)
+        pc.storageType = storageType.value.toLowerCase();
+        getStorageSizeData(pc.storageType, storageSize, storageBrand, storageModel, pc)
     })
 }
 
 function getStorageSizeData(type, storageSize, storageBrand, storageModel, pc) {
     fetch(config.url + type).then(response => response.json()).then(function (data) {
         storageSize.innerHTML = `<option>-</option>`;
+        storageBrand.innerHTML = `<option>-</option>`;
+        storageModel.innerHTML = `<option>-</option>`;
         let TBsize = {};
         let GBsize = {};
         let brands = {};
@@ -232,6 +236,7 @@ function getStorageSizeData(type, storageSize, storageBrand, storageModel, pc) {
         getModel(data, models);
         getBenchMark(data, benchMarks);
         addOptions(TBsize, storageSize);
+        addOptions(GBsize, storageSize);
         
         storageSize.addEventListener("change", function(){
             pc.storageSize = storageSize.value;
@@ -253,20 +258,78 @@ function getStorageBrand(type, storageBrand, storageModel, brands, models, bench
 }
 
 function getStorageSize(data, TBsize, GBsize) {
+    let tempTB = {};
+    let tempGB = {};
     for(let i in data) {
         let currentData = data[i].Model;
         let currentSize = currentData.split(" ").at(-1);
         if (currentSize.includes("GB")) {
-            if (GBsize[currentSize] === undefined) {
-                GBsize[currentSize] = currentSize;
-             }
+            if (tempGB[currentSize] === undefined) tempGB[currentSize] = currentSize;
         }
         else if (currentSize.includes("TB")){
-            if(TBsize[currentSize] === undefined ) TBsize[currentSize] = currentSize;
+            if(tempTB[currentSize] === undefined ) tempTB[currentSize] = currentSize;
         }
     }
+    let GBSizeList = Object.keys(tempGB);
+    let TBSizeList = Object.keys(tempTB);
+
+    GBSizeList = GBSizeList.map(items => parseFloat(items.slice(0,-2))).sort((a, b) => b - a).map(x => x.toString() + "TB")
+    TBSizeList = TBSizeList.map(items => parseFloat(items.slice(0,-2))).sort((a, b) => b - a).map(x => x.toString() + "TB")
+
+    for (let ele of GBSizeList) GBsize[ele] = ele;
+    for (let ele of TBSizeList) TBsize[ele] = ele;
 }
 
+function createPC(pc) {
+    let count = 0;
+    let modelList = [pc.cpuModel, pc.gpuModel, pc.ramModel, pc.storageModel];
+    let gamingScore = PC.getGamingBenchmark(pc);
+    let workScore = PC.getWorkBenchmark(pc);
+    for (let i = 0; i < modelList.length; i++) {
+        if (modelList[i] == null) {
+            return alert("Please fill in all forms.");
+        }
+    }
+    count++;
+
+    let div = document.createElement("div");
+    div.classList.add("bg-primary", "text-white", "m-2", "col-12");
+    div.innerHTML = `
+    <div class="m-2 pt-3 d-flex justify-content-center">
+        <h1>Your PC ${count}</h1>
+    </div>
+    <div class="m-2 pt-3 d-flex flex-column">
+        <h1>CPU</h1>
+        <h5>Brand: ${pc.cpuBrand}</h5>
+        <h5>Model: ${pc.cpuModel}</h5>
+    </div>
+    <div class="m-2 pt-3 d-flex flex-column">
+        <h1>GPU</h1>
+        <h5>Brand: ${pc.gpuBrand}</h5>
+        <h5>Model: ${pc.gpuModel}</h5>
+    </div>
+    <div class="m-2 pt-3 d-flex flex-column">
+        <h1>RAM</h1>
+        <h5>Brand: ${pc.ramBrand}</h5>
+        <h5>Model: ${pc.ramModel}</h5>
+    </div>
+    <div class="m-2 pt-3 d-flex flex-column">
+        <h1>Storage</h1>
+        <h5>Disk: ${pc.storageType}</h5>
+        <h5>Storage: ${pc.storageSize}</h5>
+        <h5>Brand: ${pc.storageBrand}</h5>
+        <h5>Model: ${pc.storageModel}</h5>
+    </div>
+    <div class="m-2 pt-3 d-flex justify-content-around align-items-center">
+        <h1>Gaming: ${gamingScore}%</h1>
+        <h1>Work: ${workScore}%</h1>
+    </div>
+    `;
+    const displayPC = document.getElementById("displayPC");
+    displayPC.append(div);
+    return displayPC;
+}
+ 
 
 // ここら辺の重複もなんとかしたい
 let pc = new PC();
@@ -281,140 +344,12 @@ let storageType = document.getElementById("storage-type")
 let storageSize = document.getElementById("storage-size")
 let storageBrand = document.getElementById("storage-brand")
 let storageModel = document.getElementById("storage-model")
+let addPC = document.getElementById("addPC")
+let displayPC = document.getElementById("displayPC")
 
 getBrandData("cpu", cpuBrand, cpuModel ,pc);
 getBrandData("gpu", gpuBrand, gpuModel ,pc);
 getStorageData(storageBrand, storageModel, pc);
+getRamBrand(ramBrand, ramModel, pc);
 
-getRamBrand(ramBrand, ramModel, pc)
-
-//     static getBrandData(parts, brandOp, modelOp, pc){ //->String, NodeList, NodeList, Object
-//         fetch(config.url + parts).then(response=>response.json()).then(function(data){
-//             brandOp.innerHTML = `<option>-</option>`;
-//             let brandData = Controller.getBrand(data);
-//             let modelData = Controller.getModel(data);
-//             let benchmarkData = Controller.getBenchmark(data);
-//             for(let brand in brandData){
-//                 let option = document.createElement("option");
-//                 option.value = brandData[brand];
-//                 option.innerText = brandData[brand];
-//                 brandOp.append(option);
-//             }
-//             brandOp.addEventListener("change", function(){
-//                 Controller.getModelData(parts, brandOp, modelOp, modelData, benchmarkData, pc);
-//             });
-//         })
-//     }
-
-//     static getModelData(parts, brandOp, modelOp, modelData, benchmarkData, pc){ //->String, NodeList, NodeList,Array, Array, Object
-//         fetch(config.url + parts).then(response=>response.json()).then(function(data){
-//             modelOp.innerHTML = `<option>-</option>`;
-//             let selectedBrand = brandOp.value;
-//             PC.addBrandData(parts, selectedBrand, pc);
-
-//             if(parts == "hdd" || parts == "ssd"){
-//                 const storageSizeOp = document.querySelectorAll(config.storage.size)[0];
-//                 let selectedSize = storageSizeOp.value;
-//                 let filteredStorageModel = Controller.filterStorageModel(selectedSize, modelData[selectedBrand]);
-//                 Controller.addOptionList(filteredStorageModel, modelOp);
-//             }else if(parts == "ram"){
-//                 const ramNumOp = document.querySelectorAll(config.ram.num)[0];
-//                 let selectedNumber = ramNumOp.value;
-//                 let filteredRamModel = Controller.filterRamModel(selectedNumber, modelData[selectedBrand]);
-//                 Controller.addOptionList(filteredRamModel, modelOp);
-//             } else{
-//                 Controller.addOptionList(modelData[selectedBrand], modelOp)
-//             }
-            
-//             modelOp.addEventListener("change", function(){
-//                 let selectedModel = modelOp.value;
-//                 let selectedBenchmark = benchmarkData[selectedModel];
-//                 PC.addModelData(parts, selectedModel, pc);
-//                 PC.addBenchmarkData(parts, selectedBenchmark, pc);
-//             });
-
-//         })
-//     }
-
-//     static getStorageData(storageBrandOp, storageModelOp, pc){ //->NodeList, NodeList, Object
-//         const storageTypeOp = document.querySelectorAll(config.storage.type)[0];
-//         const storageSizeOp = document.querySelectorAll(config.storage.size)[0];
-//         storageTypeOp.addEventListener("change", function(){
-//             storageSizeOp.innerHTML = `<option>-</option>`;
-//             let selectedStorageType = storageTypeOp.value;
-//             pc.storageType = selectedStorageType;
-//             if(selectedStorageType == "HDD"){
-//                 Controller.getStorageSizeData("hdd");
-//                 storageSizeOp.addEventListener("change", function(){
-//                     storageBrandOp.innerHTML = `<option>-</option>`;
-//                     let selectedSize = storageSizeOp.value;
-//                     PC.addStorageSizeData(selectedSize, pc);
-//                     Controller.getBrandData("hdd", storageBrandOp, storageModelOp, pc);            
-//                 })
-//             } else{
-//                 Controller.getStorageSizeData("ssd");
-//                 storageSizeOp.addEventListener("change", function(){
-//                     storageModelOp.innerHTML = `<option>-</option>`;
-//                     let selectedSize = storageSizeOp.value;
-//                     PC.addStorageSizeData(selectedSize, pc);
-//                     Controller.getBrandData("ssd", storageBrandOp, storageModelOp, pc);
-//                 })
-//             }
-//         });
-//     }
-
-//     static getStorageSizeData(type){ //->String
-//         fetch(config.url + type).then(response=>response.json()).then(function(data){
-//             const storageSizeOp = document.querySelectorAll(config.storage.size)[0];
-//             let storagemodelData = Controller.getStorageModel(data);
-//             let storageSizeList = Controller.getStorageSizeList(storagemodelData);
-//             Controller.addOptionList(storageSizeList, storageSizeOp);
-//         });
-//     }
-
-//     static getStorageSizeList(storageModelData){ //->Object
-//         let storageModelList = Object.keys(storageModelData); 
-//         let tbSizeList = [];
-//         let gbSizeList = [];
-
-//         storageModelList.forEach(model =>{
-//             if(model.includes("TB")) tbSizeList.push(parseFloat(model.replace("TB",'')));
-//             else gbSizeList.push(parseFloat(model.replace("GB",'')));
-//         })
-
-//         let sortedTb = tbSizeList.sort((a, b) => b - a).map(x => x.toString() + "TB");
-//         let sortedGb = gbSizeList.sort((a, b) => b - a).map(x => x.toString() + "GB");
-//         return sortedTb.concat(sortedGb);
-//     }
-
-
-//     static getStorageModel(data){ //->Array
-//         let modelData = {};
-//         for(let i in data){
-//             let currentData = Controller.getStorageSizeString(data[i].Model);
-//             if(modelData[currentData] == undefined) modelData[currentData] = currentData;
-//         }
-//         return modelData;
-//     }
-
-//     static getStorageSizeString(storageModel){ //->String
-//         let storageSize = storageModel.split(' ').filter(word => word.includes("GB") || word.includes("TB")).join('');
-//         return storageSize;
-//     }
-
-//     static filterStorageModel(size, storageModelData){ //->String, Array
-//         let storageModelList = Object.values(storageModelData);
-//         return storageModelList.filter(word => word.includes(' ' + size));
-//     }
-
-//     static clickAddPc(pc){ //->Object
-//         let modelList = [pc.cpuModel, pc.gpuModel, pc.ramModel, pc.storageModel];
-//         let gamingScore = PC.getGamingBenchmark(pc);
-//         let workScore = PC.getWorkBenchmark(pc);
-//         for(let i = 0; i < modelList.length; i++){
-//             if(modelList[i] == null) return alert("Please fill in all forms.")
-//         }
-//         Controller.count++;
-//         return View.createbuiltPcPage(pc, gamingScore, workScore, Controller.count);
-//     }
-// }
+addPC.addEventListener("click", () => createPC(pc));
