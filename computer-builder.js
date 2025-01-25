@@ -34,7 +34,8 @@ class PC {
             case "ram":
                 pc.ramBrand = brand;
                 break;
-            case "storage":
+            case "ssd":
+            case "hdd":
                 pc.storageBrand = brand;
                 break;
         }
@@ -96,12 +97,13 @@ class PC {
 // パーツのブランドをフェッチする
 function getBrandData(parts, brandOption, modelOption, pc) {
     fetch(config.url + parts).then(response => response.json()).then(function (data) {
-        let brands = {}; // ブランド名を一意にするためのオブジェクト
-        let models = {};
-        let benchMarks = {};
+        // ブランド名を一意にする
+        let brands = {};  //{brand: brand}
+        let models = {};  //{model: brand}
+        let benchMarks = {};  // {model: benchmark}
         getBrand(data, brands);
-        getModel(data, models)
-        getBenchMark(data, benchMarks)
+        getModel(data, models);
+        getBenchMark(data, benchMarks);
 
         // ブランドオプションを追加
         addOptions(brands, brandOption);
@@ -115,38 +117,108 @@ function getBrandData(parts, brandOption, modelOption, pc) {
 }
 
 function getModelData(parts, modelOption, models, benchMarks, pc) {
-    fetch(config.url + parts).then(response => response.json()).then(function (data) {
-        modelOption.innerHTML = `<option>-</option>`;
-        // フィルター関数
-        switch (parts) {
-            case "ram" :
-                let filterRamList = ramModelFilter(models, pc);
-                addOptions(filterRamList, modelOption);
-                break;
-            case "ssd":
-            case "hdd" :
-                let filterStorageList = storageModelFilter(models, pc);
-                addOptions(filterStorageList, modelOption);
-                break;
+    modelOption.innerHTML = `<option>-</option>`;
+    switch (parts) {
+        case "ram" :
+            let filterRamList = ramModelFilter(models, pc);
+            addOptions(filterRamList, modelOption);
+            break;
+        case "ssd":
+        case "hdd" :
+            let filterStorageList = storageModelFilter(models, pc);
+            addOptions(filterStorageList, modelOption);
+            break;
+        default:
+            let filterList = modelFilter(parts, models, pc);
+            addOptions(filterList, modelOption);
+            break;
+    }
 
-            default:
-                let filterList = modelFilter(parts, models, pc)
-                addOptions(filterList, modelOption);
-        }
+    modelOption.addEventListener("change", function(){
+        let model = modelOption.value;
+        let benchMark = benchMarks[model];
+        pc.setModel(parts, model, pc);
+        pc.setBenchMark(parts, benchMark, pc);
+    });
+}
 
-        modelOption.addEventListener("change", function(){
-            let model = modelOption.value;
-            let benchMark = benchMarks[model];
-            pc.setModel(parts, model, pc);
-            pc.setBenchMark(parts, benchMark, pc);
+function getRamBrandData(ramBrand, ramModel, pc) {
+    ramNum.addEventListener("change", function() {
+        ramModel.innerHTML = `<option>-</option>`;
+        pc.ramNum = ramNum.value;
+        getBrandData("ram", ramBrand, ramModel, pc);
+    })
+}
+
+function getStorageData(storageBrand, storageModel, pc) { 
+    storageType.addEventListener("change", function() {
+        pc.storageType = storageType.value.toLowerCase();
+        getStorageSizeData(pc.storageType, storageSize, storageBrand, storageModel, pc);
+    })
+}
+
+function getStorageSizeData(type, storageSize, storageBrand, storageModel, pc) {
+    fetch(config.url + type).then(response => response.json()).then(function (data) {
+        storageSize.innerHTML = `<option>-</option>`;
+        storageModel.innerHTML = `<option>-</option>`;
+        let TBsize = {}; //{size: size}
+        let GBsize = {}; //{size: size}
+        getStorageSize(data, TBsize, GBsize);
+
+        let brands = {};
+        let models = {};
+        let benchMarks = {};
+        getBrand(data, brands)
+        getModel(data, models);
+
+        getBenchMark(data, benchMarks);
+        addOptions(TBsize, storageSize);
+        addOptions(GBsize, storageSize);
+        
+        storageSize.addEventListener("change", function(){
+            pc.storageSize = storageSize.value;
+            getStorageBrand(type, storageBrand, storageModel, brands, models, benchMarks, pc);
         });
     })
+}
+
+function getStorageBrand(type, storageBrand, storageModel, brands, models, benchMarks, pc) {
+    storageBrand.innerHTML = `<option>-</option>`;
+    addOptions(brands, storageBrand);
+    
+    storageBrand.addEventListener("change", function() {
+        pc.storageBrand = storageBrand.value;
+        getModelData(type, storageModel, models, benchMarks, pc)
+    })
+}
+
+function getStorageSize(data, TBsize, GBsize) {
+    let tempTB = {};
+    let tempGB = {};
+    for(let i in data) {
+        let currentData = data[i].Model;
+        let currentSize = currentData.split(" ").at(-1);
+        if (currentSize.includes("GB")) {
+            if (tempGB[currentSize] === undefined) tempGB[currentSize] = currentSize;
+        }
+        else if (currentSize.includes("TB")){
+            if(tempTB[currentSize] === undefined ) tempTB[currentSize] = currentSize;
+        }
+    }
+    let GBSizeList = Object.keys(tempGB);
+    let TBSizeList = Object.keys(tempTB);
+
+    GBSizeList = GBSizeList.map(items => parseFloat(items.slice(0,-2))).sort((a, b) => b - a).map(x => x.toString() + "TB")
+    TBSizeList = TBSizeList.map(items => parseFloat(items.slice(0,-2))).sort((a, b) => b - a).map(x => x.toString() + "TB")
+
+    for (let ele of GBSizeList) GBsize[ele] = ele;
+    for (let ele of TBSizeList) TBsize[ele] = ele;
 }
 
 function getBrand(data, brandList) {
     for (let i in data) {
         let currentData = data[i];
-        if (brandList[currentData.Brand] === undefined) { // ブランド名が存在する場合のみ処理
+        if (brandList[currentData.Brand] === undefined) { 
             brandList[currentData.Brand] = currentData.Brand;
         }
     }
@@ -155,7 +227,7 @@ function getBrand(data, brandList) {
 function getModel(data, modelList) {
     for (let i in data) {
         let currentData = data[i];
-        if (modelList[currentData.Model] === undefined) { // ブランド名が存在する場合のみ処理
+        if (modelList[currentData.Model] === undefined) { 
             modelList[currentData.Model] = currentData.Brand;
         }
     }
@@ -164,7 +236,7 @@ function getModel(data, modelList) {
 function getBenchMark(data, bmList) {
     for (let i in data) {
         let currentData = data[i];
-        if (bmList[currentData.Model] === undefined) { // ブランド名が存在する場合のみ処理
+        if (bmList[currentData.Model] === undefined) {
             bmList[currentData.Model] = currentData.Benchmark;
         }
     }
@@ -204,80 +276,7 @@ function storageModelFilter(models, pc) {
     for(let key in models) {
         if(models[key] == pc.storageBrand && key.includes(pc.storageSize)) filterList[key] = key;
     }
-    return filterList
-}
-
-function getRamBrand(ramBrand, ramModel, pc) {
-    ramNum.addEventListener("change", function() {
-        pc.ramNum = ramNum.value;
-        getBrandData("ram", ramBrand, ramModel, pc)
-    })
-}
-
-function getStorageData(storageBrand, storageModel, pc) { 
-    storageType.addEventListener("change", function() {
-        pc.storageType = storageType.value.toLowerCase();
-        getStorageSizeData(pc.storageType, storageSize, storageBrand, storageModel, pc)
-    })
-}
-
-function getStorageSizeData(type, storageSize, storageBrand, storageModel, pc) {
-    fetch(config.url + type).then(response => response.json()).then(function (data) {
-        storageSize.innerHTML = `<option>-</option>`;
-        storageBrand.innerHTML = `<option>-</option>`;
-        storageModel.innerHTML = `<option>-</option>`;
-        let TBsize = {};
-        let GBsize = {};
-        let brands = {};
-        let models = {};
-        let benchMarks = {};
-        getStorageSize(data, TBsize, GBsize);
-        getBrand(data, brands)
-        getModel(data, models);
-        getBenchMark(data, benchMarks);
-        addOptions(TBsize, storageSize);
-        addOptions(GBsize, storageSize);
-        
-        storageSize.addEventListener("change", function(){
-            pc.storageSize = storageSize.value;
-            getStorageBrand(type, storageBrand, storageModel, brands, models, benchMarks, pc);
-        });
-    })
-}
-
-function getStorageBrand(type, storageBrand, storageModel, brands, models, benchMarks, pc) {
-    fetch(config.url + type).then(response => response.json()).then(function (data) {
-        storageBrand.innerHTML = `<option>-</option>`;
-        addOptions(brands, storageBrand);
-        
-        storageBrand.addEventListener("change", function() {
-            pc.storageBrand = storageBrand.value;
-            getModelData(type, storageModel, models, benchMarks, pc)
-        })
-    })
-}
-
-function getStorageSize(data, TBsize, GBsize) {
-    let tempTB = {};
-    let tempGB = {};
-    for(let i in data) {
-        let currentData = data[i].Model;
-        let currentSize = currentData.split(" ").at(-1);
-        if (currentSize.includes("GB")) {
-            if (tempGB[currentSize] === undefined) tempGB[currentSize] = currentSize;
-        }
-        else if (currentSize.includes("TB")){
-            if(tempTB[currentSize] === undefined ) tempTB[currentSize] = currentSize;
-        }
-    }
-    let GBSizeList = Object.keys(tempGB);
-    let TBSizeList = Object.keys(tempTB);
-
-    GBSizeList = GBSizeList.map(items => parseFloat(items.slice(0,-2))).sort((a, b) => b - a).map(x => x.toString() + "TB")
-    TBSizeList = TBSizeList.map(items => parseFloat(items.slice(0,-2))).sort((a, b) => b - a).map(x => x.toString() + "TB")
-
-    for (let ele of GBSizeList) GBsize[ele] = ele;
-    for (let ele of TBSizeList) TBsize[ele] = ele;
+    return filterList;
 }
 
 function createPC(pc) {
@@ -325,31 +324,29 @@ function createPC(pc) {
         <h1>Work: ${workScore}%</h1>
     </div>
     `;
-    const displayPC = document.getElementById("displayPC");
     displayPC.append(div);
-    return displayPC;
 }
  
 
 // ここら辺の重複もなんとかしたい
 let pc = new PC();
-let cpuBrand = document.getElementById("cpu-brand");
-let cpuModel = document.getElementById("cpu-model");
-let gpuBrand = document.getElementById("gpu-brand");
-let gpuModel = document.getElementById("gpu-model");
-let ramNum = document.getElementById("ram-num")
-let ramBrand = document.getElementById("ram-brand")
-let ramModel = document.getElementById("ram-model")
-let storageType = document.getElementById("storage-type")
-let storageSize = document.getElementById("storage-size")
-let storageBrand = document.getElementById("storage-brand")
-let storageModel = document.getElementById("storage-model")
-let addPC = document.getElementById("addPC")
-let displayPC = document.getElementById("displayPC")
+const cpuBrand = document.getElementById("cpu-brand");
+const cpuModel = document.getElementById("cpu-model");
+const gpuBrand = document.getElementById("gpu-brand");
+const gpuModel = document.getElementById("gpu-model");
+const ramNum = document.getElementById("ram-num")
+const ramBrand = document.getElementById("ram-brand")
+const ramModel = document.getElementById("ram-model")
+const storageType = document.getElementById("storage-type")
+const storageSize = document.getElementById("storage-size")
+const storageBrand = document.getElementById("storage-brand")
+const storageModel = document.getElementById("storage-model")
+const addPC = document.getElementById("addPC")
+const displayPC = document.getElementById("displayPC")
 
 getBrandData("cpu", cpuBrand, cpuModel ,pc);
 getBrandData("gpu", gpuBrand, gpuModel ,pc);
+getRamBrandData(ramBrand, ramModel, pc);
 getStorageData(storageBrand, storageModel, pc);
-getRamBrand(ramBrand, ramModel, pc);
 
 addPC.addEventListener("click", () => createPC(pc));
